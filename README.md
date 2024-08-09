@@ -39,4 +39,5 @@ $ make -j
 
 ## Details
 
-Implements curve25519 as described by Martin Kleppmann: https://martin.kleppmann.com/papers/curve25519.pdf
+- Implements curve25519 as described by Martin Kleppmann: https://martin.kleppmann.com/papers/curve25519.pdf
+- Build is optimized for native GPU arch, thus, binary is not necessarily portable
