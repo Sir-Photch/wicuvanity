@@ -1,5 +1,6 @@
 #include <curand_kernel.h>
 #include <cxxopts.hpp>
+#include <iostream>
 #include <stdio.h>
 
 typedef int64_t i64;
@@ -231,8 +232,18 @@ __device__ char* custrcasestr(const char* haystack, const char* needle) {
     return ((char*)haystack);
 }
 
-__global__ void generator(const char* needle, int in) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void generator(const char* _needle, size_t needlesize, int in) {
+    int tid = threadIdx.x, idx = blockIdx.x * blockDim.x + tid;
+
+    extern __shared__ char needle[];
+
+    if (tid < needlesize) {
+        needle[tid] = _needle[tid];
+    } else if (tid == needlesize) {
+        needle[tid] = '\0';
+    }
+
+    __syncthreads();
 
     curandState_t state;
     curand_init(0, idx, 0, &state);
@@ -240,7 +251,6 @@ __global__ void generator(const char* needle, int in) {
     u8 privkey[32], pubkey[32];
     char privkey_b64[45], pubkey_b64[45];
 
-    unsigned long long iterations = 0, elapsed_ns = 0, start, stop;
     while (true) {
         for (int i = 0; i < 32; i++) {
             privkey[i] = curand(&state) % 256;
@@ -268,12 +278,19 @@ int main(int argc, char** argv) {
 
     options.add_options()("needle", "needle to find", cxxopts::value<std::string>())
                        ("in", "needle in first ... characters", cxxopts::value<int>()->default_value("10"))
-                       ("gridsize", "grid size", cxxopts::value<int>()->default_value("1024"))
-                       ("blocksize", "block size", cxxopts::value<int>()->default_value("256"));
+                       ("gridsize", "Number of blocks", cxxopts::value<int>()->default_value("1024"))
+                       ("blocksize", "Number of threads in block", cxxopts::value<int>()->default_value("256"))
+                       ("h,help", "print usage");
 
     options.parse_positional({ "needle" });
+    options.positional_help("needle");
 
     auto result = options.parse(argc, argv);
+
+    if (result.count("help")) {
+        std::cout << options.help() << std::endl;
+        return 0;
+    }
 
     auto needle = result["needle"].as<std::string>();
     char *pndl_host = const_cast<char*>(needle.c_str()), *pndl_dev;
@@ -281,19 +298,29 @@ int main(int argc, char** argv) {
     cudaHostRegister(pndl_host, needle.size(), cudaHostRegisterReadOnly);
     cudaHostGetDevicePointer(&pndl_dev, pndl_host, 0);
 
-    generator<<<result["gridsize"].as<int>(), result["blocksize"].as<int>()>>>(
-        pndl_dev,
-        result["in"].as<int>()
-    );
+    int gridsize = result["gridsize"].as<int>(), blocksize = result["blocksize"].as<int>(),
+        needlesize = needle.size(), in = result["in"].as<int>();
+
+    if (blocksize < needlesize) {
+        std::cerr << "Error: block size must be greater than needle size" << std::endl;
+        return 1;
+    }
+
+    generator<<<gridsize, blocksize, needlesize + 1>>>(pndl_dev, needlesize, in);
     cudaDeviceSynchronize();
 
     cudaHostUnregister(pndl_host);
 
     cudaError_t code;
-    if (cudaSuccess != (code = cudaGetLastError())) {
-        fprintf(stderr, "Error: %s\n", cudaGetErrorString(code));
-        return 1;
+    switch (code = cudaGetLastError()) {
+        case cudaSuccess:
+            return 0;
+        case cudaErrorLaunchOutOfResources:
+            std::cerr << "Error: out of resources. Try decreasing --blocksize to " << blocksize - 32
+                      << std::endl;
+            return 1;
+        default:
+            std::cerr << "Error: " << cudaGetErrorString(code) << std::endl;
+            return 1;
     }
-
-    return 0;
 }
