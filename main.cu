@@ -303,8 +303,8 @@ int main(int argc, char** argv) {
 
     options.add_options()("needle", "needle to find", cxxopts::value<std::string>())
                        ("in", "needle in first ... characters", cxxopts::value<int>()->default_value("10"))
-                       ("gridsize", "Number of blocks", cxxopts::value<int>()->default_value("1024"))
-                       ("blocksize", "Number of threads in block", cxxopts::value<int>()->default_value("256"))
+                       ("gridsize", "Manually set number of blocks. Requires --blocksize.", cxxopts::value<int>())
+                       ("blocksize", "Manually set number of threads in block. Requires --gridsize.", cxxopts::value<int>())
                        ("h,help", "print usage");
 
     options.parse_positional({ "needle" });
@@ -323,8 +323,13 @@ int main(int argc, char** argv) {
     cudaHostRegister(pndl_host, needle.size(), cudaHostRegisterReadOnly);
     cudaHostGetDevicePointer(&pndl_dev, pndl_host, 0);
 
-    int gridsize = result["gridsize"].as<int>(), blocksize = result["blocksize"].as<int>(),
-        needlesize = needle.size(), in = result["in"].as<int>();
+    int needlesize = needle.size(), in = result["in"].as<int>(), gridsize, blocksize;
+    
+    if (result.count("gridsize") && result.count("blocksize")) {
+        gridsize = result["gridsize"].as<int>();
+        blocksize = result["blocksize"].as<int>();
+    } else
+        cudaOccupancyMaxPotentialBlockSize(&gridsize, &blocksize, generator, needlesize + 1);
 
     if (blocksize < needlesize) {
         std::cerr << "Error: block size must be greater than needle size" << std::endl;
