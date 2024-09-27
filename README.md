@@ -28,13 +28,11 @@ $ wc -l gpu.keys
 
 ## Build
 
-Requires up-to-date cmake and cuda toolkit, as well as [cxxopts](https://github.com/jarro2783/cxxopts).
+Requires up-to-date meson and cuda toolkit, as well as [cxxopts](https://github.com/jarro2783/cxxopts).
 
 ```console
-$ mkdir build
-$ cd build
-$ cmake -DCMAKE_BUILD_TYPE=Release ..
-$ make -j
+$ meson setup builddir --buildtype release
+$ meson install -C builddir
 ```
 
 ## Details
