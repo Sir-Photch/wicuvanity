@@ -319,6 +319,7 @@ int main(int argc, char** argv) {
 
     auto needle = result["needle"].as<std::string>();
     char *pndl_host = const_cast<char*>(needle.c_str()), *pndl_dev;
+    cudaError_t code;
 
     cudaHostRegister(pndl_host, needle.size(), cudaHostRegisterReadOnly);
     cudaHostGetDevicePointer(&pndl_dev, pndl_host, 0);
@@ -328,8 +329,10 @@ int main(int argc, char** argv) {
     if (result.count("gridsize") && result.count("blocksize")) {
         gridsize = result["gridsize"].as<int>();
         blocksize = result["blocksize"].as<int>();
-    } else
-        cudaOccupancyMaxPotentialBlockSize(&gridsize, &blocksize, generator, needlesize + 1);
+    } else if (cudaSuccess != (code = cudaOccupancyMaxPotentialBlockSize(&gridsize, &blocksize, generator, needlesize + 1))) {
+        std::cerr << "Error: Computing block size dynamically failed (" << cudaGetErrorString(code) << "), try specifying it manually" << std::endl;
+        return 1;
+    }
 
     if (blocksize < needlesize) {
         std::cerr << "Error: block size must be greater than needle size" << std::endl;
@@ -341,7 +344,6 @@ int main(int argc, char** argv) {
 
     cudaHostUnregister(pndl_host);
 
-    cudaError_t code;
     switch (code = cudaGetLastError()) {
         case cudaSuccess:
             return 0;
