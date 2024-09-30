@@ -1,3 +1,5 @@
+**moved to sourcehut:** https://git.sr.ht/~chrs/wicuvanity
+
 # wicuvanity
 
 Generate wireguard vanity addresses with given prefix in the public key -- on your Nvidia GPU!
