@@ -1,4 +1,4 @@
-**moved to sourcehut:** https://git.sr.ht/~chrs/wicuvanity
+**moved to sourcehut:** https://git.sr.ht/~shtrophic/wicuvanity
 
 # wicuvanity
 
